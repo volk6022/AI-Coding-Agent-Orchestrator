@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  # Redis for Taskiq message broker
+  redis:
+    image: redis:7-alpine
+    container_name: orchestrator-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL database (optional - can use SQLite for development)
+  postgres:
+    image: postgres:16-alpine
+    container_name: orchestrator-postgres
+    environment:
+      POSTGRES_USER: orchestrator
+      POSTGRES_PASSWORD: orchestrator_password
+      POSTGRES_DB: orchestrator
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orchestrator"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Main FastAPI application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orchestrator-app
+    environment:
+      DATABASE_URL: postgresql+asyncpg://orchestrator:orchestrator_password@postgres:5432/orchestrator
+      REDIS_URL: redis://redis:6379
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_OWNER_ID: ${TELEGRAM_OWNER_ID}
+      MAX_CONCURRENT_INSTANCES: 3
+      IDLE_TIMEOUT: 43200
+      OPENCODE_BASE_DIR: /tmp/workspaces
+      OPENCODE_HOST: 127.0.0.1
+    ports:
+      - "8000:8000"
+    volumes:
+      - workspace_data:/tmp/workspaces
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Taskiq worker for background task processing
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orchestrator-worker
+    command: taskiq worker app.presentation.workers.broker:broker --workers 3
+    environment:
+      DATABASE_URL: postgresql+asyncpg://orchestrator:orchestrator_password@postgres:5432/orchestrator
+      REDIS_URL: redis://redis:6379
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_OWNER_ID: ${TELEGRAM_OWNER_ID}
+      MAX_CONCURRENT_INSTANCES: 3
+      IDLE_TIMEOUT: 43200
+      OPENCODE_BASE_DIR: /tmp/workspaces
+      OPENCODE_HOST: 127.0.0.1
+    volumes:
+      - workspace_data:/tmp/workspaces
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      app:
+        condition: service_started
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+volumes:
+  redis_data:
+  postgres_data:
+  workspace_data:

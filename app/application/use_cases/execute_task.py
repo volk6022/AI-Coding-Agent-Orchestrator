@@ -14,8 +14,6 @@ from app.domain.interfaces import (
 
 logger = get_logger(component="execute_task")
 
-IDLE_TIMEOUT = settings.IDLE_TIMEOUT
-
 
 async def execute_coding_task(
     issue_data: IssueData,
@@ -25,6 +23,7 @@ async def execute_coding_task(
     db: IStateRepository,
     telegram: ITelegramNotifier,
 ) -> None:
+    idle_timeout = settings.IDLE_TIMEOUT
     workspace_path = f"{settings.OPENCODE_BASE_DIR}/issue_{issue_data.issue_number}"
     branch_name = f"feature/issue_{issue_data.issue_number}"
 
@@ -38,14 +37,14 @@ async def execute_coding_task(
     await db.create_task(task_state)
 
     async with AsyncExitStack() as stack:
-        stack.callback(git.cleanup_workspace, workspace_path)
+        stack.push_async_callback(git.cleanup_workspace, workspace_path)
 
         ssh_url = github.get_ssh_url(issue_data.repo_url)
         await git.clone_ssh(ssh_url, workspace_path)
         await git.create_branch(workspace_path, branch_name)
 
         oc_process = await oc_manager.spawn_server(workspace_path)
-        stack.push_async_callback(lambda: oc_manager.kill_server(oc_process.pid))
+        stack.push_async_callback(oc_manager.kill_server, oc_process.pid)
 
         await db.set_active_instance(
             issue_data.issue_number,
@@ -72,8 +71,22 @@ async def execute_coding_task(
         task_completed = False
 
         try:
-            async with asyncio.timeout(IDLE_TIMEOUT):
+            async with asyncio.timeout(idle_timeout):
+                # We use a while loop with a break to allow re-checking for ABORTED
+                # but we must ensure we don't start a fresh listener every time if it finishes.
+                # Actually, SSE should be one long stream.
+                # If it ends, something is likely wrong or finished.
+
                 async for event in oc_client.listen_events(session_id):
+                    # Periodically check for external abort status inside the SSE stream
+                    current_state = await db.get_task_state(issue_data.issue_number)
+                    if current_state and current_state.status == TaskStatus.ABORTED:
+                        logger.info("task_aborted_by_user", issue_number=issue_data.issue_number)
+                        await telegram.send_message(
+                            f"Task #{issue_data.issue_number} aborted by user."
+                        )
+                        return
+
                     event_name = event.get("event_name", "")
                     data = event.get("data", {})
 
@@ -101,6 +114,7 @@ async def execute_coding_task(
                     elif event_name == "error":
                         error_msg = data.get("message", "Unknown error")
                         await telegram.send_message(f"OpenCode Error: {error_msg}")
+                        # We break the async for, which will lead us out of the try block
                         break
 
         except TimeoutError:
@@ -135,4 +149,13 @@ async def execute_coding_task(
             )
             await telegram.send_message(
                 f"Success! PR created for Issue #{issue_data.issue_number}."
+            )
+        else:
+            await db.set_active_instance(
+                issue_data.issue_number,
+                port=None,
+                status="FAILED",
+            )
+            await telegram.send_message(
+                f"Task #{issue_data.issue_number} finished without completion marker."
             )

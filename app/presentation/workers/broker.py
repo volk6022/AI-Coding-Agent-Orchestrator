@@ -1,9 +1,10 @@
+import asyncio
 import json
 from typing import Any, Dict
 
 import taskiq
 from taskiq import TaskiqEvents
-from taskiq_redis import RedisBroker
+from taskiq_redis import RedisStreamBroker as RedisBroker
 
 from app.core.config import settings
 from app.core.logger import get_logger
@@ -18,8 +19,10 @@ logger = get_logger(component="broker")
 
 broker = RedisBroker(settings.REDIS_URL)
 
+_concurrency_semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_INSTANCES)
 
-@broker.on_event(TaskiqEvents.WORKER_START)
+
+@broker.on_event(TaskiqEvents.WORKER_STARTUP)
 async def on_worker_start():
     logger.info("worker_started")
 
@@ -36,17 +39,18 @@ async def execute_task(task_data: Dict[str, Any]):
     db = StateRepository()
     telegram = TelegramNotifier()
 
-    try:
-        from app.application.use_cases.execute_task import execute_coding_task
+    async with _concurrency_semaphore:
+        try:
+            from app.application.use_cases.execute_task import execute_coding_task
 
-        await execute_coding_task(
-            issue_data=issue_data,
-            git=git,
-            github=github,
-            oc_manager=oc_manager,
-            db=db,
-            telegram=telegram,
-        )
-    finally:
-        await github.close()
-        await telegram.close()
+            await execute_coding_task(
+                issue_data=issue_data,
+                git=git,
+                github=github,
+                oc_manager=oc_manager,
+                db=db,
+                telegram=telegram,
+            )
+        finally:
+            await github.close()
+            await telegram.close()

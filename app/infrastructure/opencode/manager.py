@@ -2,85 +2,19 @@ from __future__ import annotations
 
 import asyncio
 import re
-import json
-from collections.abc import AsyncGenerator
-from typing import Dict, Any, Optional
-
-import httpx
+from typing import Dict, Optional
 
 from app.core.config import settings
 from app.core.logger import get_logger
 from app.domain.entities import OpenCodeProcess
-from app.domain.interfaces import IOpenCodeClient, IOpenCodeProcessManager
+from app.domain.interfaces import IOpenCodeProcessManager
+from app.infrastructure.opencode.client import OpenCodeClient
 
-logger = get_logger(component="opencode")
-
-
-class OpenCodeClient(IOpenCodeClient):
-    def __init__(self, host: str, port: int):
-        self.base_url = f"http://{host}:{port}"
-        self._client = httpx.AsyncClient(timeout=30.0)
-        self._session_id: Optional[str] = None
-
-    async def create_session(self, name: str) -> str:
-        logger.info("creating_session", name=name, base_url=self.base_url)
-
-        response = await self._client.post(
-            f"{self.base_url}/session",
-            json={"name": name},
-        )
-        response.raise_for_status()
-
-        data = response.json()
-        self._session_id = data.get("session_id")
-
-        if not self._session_id:
-            raise RuntimeError("Failed to get session_id from OpenCode server")
-
-        logger.info("session_created", session_id=self._session_id)
-        return self._session_id
-
-    async def send_message(self, session_id: str, message: str) -> None:
-        logger.info("sending_message", session_id=session_id)
-
-        response = await self._client.post(
-            f"{self.base_url}/session/{session_id}/message",
-            json={"message": {"role": "user", "content": message}},
-        )
-        response.raise_for_status()
-
-    async def send_reply(self, session_id: str, message: str) -> None:
-        logger.info("sending_reply", session_id=session_id)
-
-        response = await self._client.post(
-            f"{self.base_url}/session/{session_id}/message",
-            json={"message": {"role": "user", "content": message}},
-        )
-        response.raise_for_status()
-
-    async def listen_events(self, session_id: str) -> AsyncGenerator[Dict[str, Any], None]:  # type: ignore[override]
-        logger.info("listening_events", session_id=session_id)
-
-        async with self._client.stream(
-            "GET", f"{self.base_url}/session/{session_id}/events"
-        ) as response:
-            response.raise_for_status()
-
-            async for line in response.aiter_lines():
-                if line.startswith("data: "):
-                    data = line[6:]
-                    try:
-                        event = json.loads(data)
-                        yield event
-                    except Exception as e:
-                        logger.warning("failed_to_parse_event", error=str(e), data=data)
-
-    async def close(self) -> None:
-        await self._client.aclose()
+logger = get_logger(component="opencode_manager")
 
 
 class OpenCodeProcessManager(IOpenCodeProcessManager):
-    def __init__(self):
+    def __init__(self) -> None:
         self._processes: Dict[int, OpenCodeProcess] = {}
         self._clients: Dict[int, OpenCodeClient] = {}
 
@@ -98,7 +32,16 @@ class OpenCodeProcessManager(IOpenCodeProcessManager):
             stderr=asyncio.subprocess.PIPE,
         )
 
-        port = await self._read_dynamic_port(process.stdout)
+        try:
+            async with asyncio.timeout(30.0):
+                port = await self._read_dynamic_port(process.stdout)
+        except TimeoutError:
+            try:
+                # Cleanup the hanging process if it didn't start in time
+                await self.kill_server(process.pid)
+            except Exception:
+                pass
+            raise RuntimeError("OpenCode server failed to start - timeout waiting for port")
 
         oc_process = OpenCodeProcess(pid=process.pid, port=port)
         self._processes[process.pid] = oc_process
@@ -139,6 +82,7 @@ class OpenCodeProcessManager(IOpenCodeProcessManager):
             del self._clients[port_to_remove]
 
         try:
+            # For Windows compatibility as per previous manager code
             process = await asyncio.create_subprocess_exec(
                 "taskkill",
                 "/PID",

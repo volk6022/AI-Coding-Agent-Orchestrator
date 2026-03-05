@@ -1,0 +1,76 @@
+version: '3.8'
+
+# Docker Compose for local development and testing
+# Uses SQLite instead of PostgreSQL for simplicity
+
+services:
+  # Redis for Taskiq message broker
+  redis:
+    image: redis:7-alpine
+    container_name: orchestrator-redis-dev
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # Main FastAPI application (development mode)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orchestrator-app-dev
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:///./orchestrator.db
+      REDIS_URL: redis://redis:6379
+      GITHUB_WEBHOOK_SECRET: your_webhook_secret_here
+      GITHUB_TOKEN: ghp_your_token_here
+      TELEGRAM_BOT_TOKEN: your_bot_token_here
+      TELEGRAM_OWNER_ID: 123456789
+      MAX_CONCURRENT_INSTANCES: 2
+      IDLE_TIMEOUT: 43200
+      OPENCODE_BASE_DIR: /tmp/workspaces
+      OPENCODE_HOST: 127.0.0.1
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app:cached
+      - workspace_data:/tmp/workspaces
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    profiles:
+      - dev
+
+  # Taskiq worker for background tasks
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orchestrator-worker-dev
+    command: taskiq worker app.presentation.workers.broker:broker --workers 2
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:///./orchestrator.db
+      REDIS_URL: redis://redis:6379
+      GITHUB_WEBHOOK_SECRET: your_webhook_secret_here
+      GITHUB_TOKEN: ghp_your_token_here
+      TELEGRAM_BOT_TOKEN: your_bot_token_here
+      TELEGRAM_OWNER_ID: 123456789
+      MAX_CONCURRENT_INSTANCES: 2
+      IDLE_TIMEOUT: 43200
+      OPENCODE_BASE_DIR: /tmp/workspaces
+      OPENCODE_HOST: 127.0.0.1
+    volumes:
+      - .:/app:cached
+      - workspace_data:/tmp/workspaces
+    depends_on:
+      redis:
+        condition: service_healthy
+    profiles:
+      - dev
+
+volumes:
+  workspace_data:

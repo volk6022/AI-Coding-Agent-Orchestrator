@@ -155,8 +155,9 @@ async def handle_issue_event(
     )
 
     from app.presentation.workers.broker import broker
+    from dataclasses import asdict
 
-    await broker.execute_task.send(issue_data.model_dump())
+    await broker.execute_task.send(asdict(issue_data))
 
     return {"status": "queued", "issue_number": issue_number}
 

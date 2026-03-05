@@ -17,8 +17,8 @@ class GitCLIClient(ILocalGitClient):
         parent_dir.mkdir(parents=True, exist_ok=True)
 
         if Path(workspace_path).exists():
-            logger.warning("workspace_already_exists", path=workspace_path)
-            return
+            logger.warning("workspace_already_exists_cleaning", path=workspace_path)
+            shutil.rmtree(workspace_path, ignore_errors=True)
 
         env = os.environ.copy()
         env["GIT_SSH_COMMAND"] = "ssh -o StrictHostKeyChecking=no"

@@ -73,7 +73,7 @@ class IOpenCodeClient(ABC):
         pass
 
     @abstractmethod
-    async def listen_events(self, session_id: str) -> AsyncGenerator[Dict[str, Any], None]:
+    def listen_events(self, session_id: str) -> AsyncGenerator[Dict[str, Any], None]:
         pass
 
 
