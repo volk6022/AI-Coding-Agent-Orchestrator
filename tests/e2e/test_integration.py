@@ -419,23 +419,23 @@ class TestE2EFullFlow:
         mock_telegram: MockTelegramNotifier,
     ) -> None:
         """Test that user replies are properly routed to active session."""
-        events = create_question_then_complete_events()
-        mock_oc_manager.configure_client_events(events)
-
-        await execute_coding_task(
-            issue_data=sample_issue,
-            git=mock_git,
-            github=mock_github,
-            oc_manager=mock_oc_manager,
-            db=mock_db,
-            telegram=mock_telegram,
+        # First, create a task in WAITING_REPLY state (simulating agent asked a question)
+        task_state = TaskState(
+            issue_number=sample_issue.issue_number,
+            repo_url=sample_issue.repo_url,
+            branch_name=f"feature/issue_{sample_issue.issue_number}",
+            status=TaskStatus.WAITING_REPLY,
+            active_port=8765,
+            session_id="session_active",
+            workspace_path=f"{settings.OPENCODE_BASE_DIR}/issue_{sample_issue.issue_number}",
         )
+        await mock_db.create_task(task_state)
 
-        task_state = await mock_db.get_task_state(sample_issue.issue_number)
-        assert task_state is not None
-        assert task_state.active_port == 8765
-        assert task_state.session_id is not None
+        # Configure mock client to track replies
+        mock_oc_client = MockOpenCodeClient("127.0.0.1", 8765)
+        mock_oc_manager._mock_client = mock_oc_client
 
+        # Send user reply
         await handle_user_reply(
             issue_number=sample_issue.issue_number,
             comment_body="Here's the clarification you need",
@@ -444,9 +444,14 @@ class TestE2EFullFlow:
             telegram=mock_telegram,
         )
 
-        client = mock_oc_manager.get_client(8765)
-        assert len(client.replies_received) == 1
-        assert "clarification" in client.replies_received[0].lower()
+        # Verify reply was routed to the active session
+        assert len(mock_oc_client.replies_received) == 1
+        assert "clarification" in mock_oc_client.replies_received[0].lower()
+
+        # Verify task status was updated to RUNNING
+        updated_state = await mock_db.get_task_state(sample_issue.issue_number)
+        assert updated_state is not None
+        assert updated_state.status == TaskStatus.RUNNING
 
 
 class TestE2EFailureModes:
@@ -696,7 +701,7 @@ class TestE2EDatabasePersistence:
         assert task_state.issue_number == sample_issue.issue_number
         assert task_state.repo_url == sample_issue.repo_url
         assert task_state.branch_name == f"feature/issue_{sample_issue.issue_number}"
-        assert task_state.active_port == 8765
+        assert task_state.active_port is None  # Port cleared after completion
         assert task_state.session_id is not None
 
     @pytest.mark.asyncio
