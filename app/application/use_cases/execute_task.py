@@ -38,14 +38,14 @@ async def execute_coding_task(
     await db.create_task(task_state)
 
     async with AsyncExitStack() as stack:
-        stack.push_async_callback(git.cleanup_workspace, workspace_path)
+        stack.callback(git.cleanup_workspace, workspace_path)
 
         ssh_url = github.get_ssh_url(issue_data.repo_url)
         await git.clone_ssh(ssh_url, workspace_path)
         await git.create_branch(workspace_path, branch_name)
 
         oc_process = await oc_manager.spawn_server(workspace_path)
-        stack.push_async_callback(oc_manager.kill_server, oc_process.pid)
+        stack.push_async_callback(lambda: oc_manager.kill_server(oc_process.pid))
 
         await db.set_active_instance(
             issue_data.issue_number,
@@ -73,7 +73,7 @@ async def execute_coding_task(
 
         try:
             async with asyncio.timeout(IDLE_TIMEOUT):
-                async for event in oc_client.listen_events():
+                async for event in oc_client.listen_events(session_id):
                     event_name = event.get("event_name", "")
                     data = event.get("data", {})
 

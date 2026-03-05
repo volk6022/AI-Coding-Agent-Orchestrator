@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import re
 import json
+from collections.abc import AsyncGenerator
 from typing import Dict, Any, Optional
 
 import httpx
@@ -57,11 +58,11 @@ class OpenCodeClient(IOpenCodeClient):
         )
         response.raise_for_status()
 
-    async def listen_events(self) -> AsyncGenerator[Dict[str, Any], None]:  # type: ignore[override]
-        logger.info("listening_events", session_id=self._session_id)
+    async def listen_events(self, session_id: str) -> AsyncGenerator[Dict[str, Any], None]:  # type: ignore[override]
+        logger.info("listening_events", session_id=session_id)
 
         async with self._client.stream(
-            "GET", f"{self.base_url}/session/{self._session_id}/events"
+            "GET", f"{self.base_url}/session/{session_id}/events"
         ) as response:
             response.raise_for_status()
 

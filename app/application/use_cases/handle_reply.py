@@ -1,4 +1,5 @@
 from app.core.logger import get_logger
+from app.domain.entities import TaskStatus
 from app.domain.interfaces import IOpenCodeProcessManager, IStateRepository, ITelegramNotifier
 
 logger = get_logger(component="handle_reply")
@@ -15,6 +16,12 @@ async def handle_user_reply(
 
     if not task_state:
         logger.warning("no_active_task_for_issue", issue_number=issue_number)
+        return
+
+    if task_state.status not in (TaskStatus.RUNNING, TaskStatus.WAITING_REPLY):
+        logger.warning(
+            "task_not_awaiting_reply", issue_number=issue_number, status=task_state.status
+        )
         return
 
     if not task_state.active_port or not task_state.session_id:
