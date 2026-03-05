@@ -22,7 +22,7 @@ class OpenCodeProcessManager(IOpenCodeProcessManager):
         logger.info("spawning_opencode_server", workspace_path=workspace_path)
 
         process = await asyncio.create_subprocess_exec(
-            "opencode",
+            settings.OPENCODE_CLI_NAME,
             "serve",
             "--port",
             "0",

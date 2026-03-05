@@ -19,6 +19,7 @@ class Settings(BaseSettings):
 
     OPENCODE_BASE_DIR: str = "/tmp/workspaces"
     OPENCODE_HOST: str = "127.0.0.1"
+    OPENCODE_CLI_NAME: str = "opencode"
 
 
 settings = Settings()

@@ -33,6 +33,7 @@ services:
       IDLE_TIMEOUT: 43200
       OPENCODE_BASE_DIR: /tmp/workspaces
       OPENCODE_HOST: 127.0.0.1
+      OPENCODE_CLI_NAME: ${OPENCODE_CLI_NAME:-opencode}
     ports:
       - "8000:8000"
     volumes:
@@ -63,6 +64,7 @@ services:
       IDLE_TIMEOUT: 43200
       OPENCODE_BASE_DIR: /tmp/workspaces
       OPENCODE_HOST: 127.0.0.1
+      OPENCODE_CLI_NAME: ${OPENCODE_CLI_NAME:-opencode}
     volumes:
       - .:/app:cached
       - workspace_data:/tmp/workspaces
