@@ -50,17 +50,17 @@ AI-Coding-Agent-Orchestrator/
 ### App Layer Breakdown
 
 #### 1. Core (`app/core`)
-- **config.py**: Centralized configuration using Pydantic Settings
+- **config.py**: Centralized configuration using Pydantic Settings. Includes `GIT_TRANSPORT` toggle and `opencode_base_path` resolution.
 - **logger.py**: Structured logging configuration
 
 #### 2. Domain (`app/domain`)
 - **entities.py**: Data classes (IssueData, TaskState, TaskStatus, etc.)
 - **entities/**: Entity definitions
-- **interfaces.py**: Abstract interfaces for dependency inversion
+- **interfaces.py**: Abstract interfaces for dependency inversion. Supports lifecycle management via `close()` methods.
 
 #### 3. Application (`app/application`)
 - **use_cases/**
-  - `execute_task.py`: Main orchestration loop for coding tasks
+  - `execute_task.py`: Main orchestration loop. Handles protocol-agnostic cloning and AI session management.
   - `handle_reply.py`: Processing user replies to agents
 
 #### 4. Infrastructure (`app/infrastructure`)
@@ -68,19 +68,19 @@ AI-Coding-Agent-Orchestrator/
   - `database.py`: Connection and model definitions
   - `repository.py`: Repository pattern implementation
 - **vcs/**: Version control integrations
-  - `git_cli.py`: Local Git operations
-  - `github_api.py`: GitHub API interactions
+  - `git_cli.py`: Local Git operations with robust Windows cleanup (retries + chmod).
+  - `github_api.py`: GitHub API interactions. Supports dynamic URL generation (SSH or HTTPS+Token).
 - **opencode/**: OpenCode agent integration
   - `client.py`: OpenCode API client
-  - `manager.py`: Process management
+  - `manager.py`: Process management with dynamic port detection.
 - **telegram/**: Telegram bot integration
-  - `notifier.py`: Notification and command handling
+  - `notifier.py`: Notification and command handling with HTML safety.
 
 #### 5. Presentation (`app/presentation`)
 - **webhooks/**: GitHub webhook processing
-  - `router.py`: Main webhook endpoint and handlers
+  - `router.py`: Main webhook endpoint and handlers. Dispatches tasks to TaskIQ.
 - **workers/**: Background job processing
-  - `broker.py`: TaskIQ-based task broker and queue
+  - `broker.py`: TaskIQ-based task broker. Manages concurrency via semaphores.
 
 ## System Flow Diagrams
 
@@ -99,10 +99,10 @@ sequenceDiagram
     
     Note over GH, TG: GitHub Issue opened
     GH->>API: Webhook POST request
-    API->>Worker: Queue task
+    API->>Worker: Queue task (via TaskIQ)
     Worker->>DB: Create initial task state
-    Worker->>Git: Clone repository
-    Worker->>OC: Spawn OpenCode server
+    Worker->>Git: Clone repository (HTTPS+Token or SSH)
+    Worker->>OC: Spawn OpenCode server (CWD=workspace)
     Worker->>OCClient: Create session
     OCClient->>OC: Send initial prompt
     loop Process Events
@@ -121,7 +121,7 @@ sequenceDiagram
             Worker->>TG: Error notification
         end
     end
-    Note over Worker, TG: Task completed
+    Note over Worker, TG: Task completed & Workspace cleaned
 ```
 
 ### 2. Reply Handling Flow
