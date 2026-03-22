@@ -13,12 +13,13 @@ class GitCLIClient(ILocalGitClient):
     async def clone(self, repo_url: str, workspace_path: str) -> None:
         logger.info("cloning_repo", repo_url=repo_url, path=workspace_path)
 
-        parent_dir = Path(workspace_path).parent
+        w_path = Path(workspace_path)
+        parent_dir = w_path.parent
         parent_dir.mkdir(parents=True, exist_ok=True)
 
-        if Path(workspace_path).exists():
+        if w_path.exists():
             logger.warning("workspace_already_exists_cleaning", path=workspace_path)
-            shutil.rmtree(workspace_path, ignore_errors=True)
+            await self.cleanup_workspace(workspace_path)
 
         env = os.environ.copy()
         if repo_url.startswith("git@"):
@@ -121,6 +122,27 @@ class GitCLIClient(ILocalGitClient):
     async def cleanup_workspace(self, workspace_path: str) -> None:
         logger.info("cleanup_workspace", path=workspace_path)
 
-        if Path(workspace_path).exists():
-            shutil.rmtree(workspace_path, ignore_errors=True)
-            logger.info("workspace_cleaned", path=workspace_path)
+        def onerror(func, path, exc_info):
+            import stat
+
+            if not os.access(path, os.W_OK):
+                os.chmod(path, stat.S_IWUSR)
+                func(path)
+            else:
+                raise
+
+        path = Path(workspace_path)
+        if path.exists():
+            # Try a few times on Windows as files might be locked briefly
+            for i in range(3):
+                try:
+                    shutil.rmtree(workspace_path, onerror=onerror)
+                    logger.info("workspace_cleaned", path=workspace_path)
+                    return
+                except Exception as e:
+                    if i == 2:
+                        logger.error(
+                            "failed_to_cleanup_workspace", path=workspace_path, error=str(e)
+                        )
+                    else:
+                        await asyncio.sleep(1)

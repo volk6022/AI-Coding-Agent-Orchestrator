@@ -21,6 +21,13 @@ from app.application.use_cases.execute_task import execute_coding_task
 from app.application.use_cases.handle_reply import handle_user_reply
 from app.core.config import settings
 from app.domain.entities import IssueData, OpenCodeProcess, TaskState, TaskStatus
+from app.domain.interfaces import (
+    IGitHubClient,
+    ILocalGitClient,
+    IOpenCodeProcessManager,
+    IOpenCodeClient,
+    ITelegramNotifier,
+)
 from app.infrastructure.db.database import async_session_maker, init_db
 from app.infrastructure.db.repository import StateRepository
 from app.infrastructure.opencode.client import OpenCodeClient
@@ -79,7 +86,7 @@ class MockOpenCodeEventStream:
             await asyncio.sleep(100)
 
 
-class MockOpenCodeClient:
+class MockOpenCodeClient(IOpenCodeClient):
     """Mock OpenCode client for integration testing."""
 
     def __init__(self, host: str, port: int):
@@ -120,7 +127,7 @@ class MockOpenCodeClient:
         return self._replies_sent
 
 
-class MockGitCLIClient:
+class MockGitCLIClient(ILocalGitClient):
     """Mock Git client that simulates git operations."""
 
     def __init__(self) -> None:
@@ -162,7 +169,7 @@ class MockGitCLIClient:
             shutil.rmtree(workspace_path, ignore_errors=True)
 
 
-class MockGitHubAPIClient:
+class MockGitHubAPIClient(IGitHubClient):
     """Mock GitHub API client for testing."""
 
     def __init__(self) -> None:
@@ -210,7 +217,7 @@ class MockGitHubAPIClient:
         pass
 
 
-class MockTelegramNotifier:
+class MockTelegramNotifier(ITelegramNotifier):
     """Mock Telegram notifier for testing."""
 
     def __init__(self) -> None:
@@ -223,7 +230,7 @@ class MockTelegramNotifier:
         pass
 
 
-class MockOpenCodeProcessManager:
+class MockOpenCodeProcessManager(IOpenCodeProcessManager):
     """Mock process manager for testing."""
 
     def __init__(self) -> None:

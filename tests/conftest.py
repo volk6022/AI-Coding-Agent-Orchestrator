@@ -42,7 +42,7 @@ async def db_session() -> AsyncGenerator[None, None]:
 @pytest.fixture
 def mock_github_client() -> MagicMock:
     client = MagicMock(spec=GitHubAPIClient)
-    client.get_ssh_url = MagicMock(return_value="git@github.com:test/repo.git")
+    client.get_clone_url = MagicMock(return_value="git@github.com:test/repo.git")
     client.post_comment = AsyncMock()
     client.create_pull_request = AsyncMock()
     client.get_issue = AsyncMock()
@@ -53,9 +53,9 @@ def mock_github_client() -> MagicMock:
 @pytest.fixture
 def mock_git_client() -> MagicMock:
     client = MagicMock(spec=GitCLIClient)
-    client.clone_ssh = AsyncMock()
+    client.clone = AsyncMock()
     client.create_branch = AsyncMock()
-    client.commit_and_push_ssh = AsyncMock()
+    client.commit_and_push = AsyncMock()
     client.cleanup_workspace = AsyncMock()
     return client
 
@@ -105,13 +105,13 @@ def sample_task_state(sample_issue_data: IssueData) -> TaskState:
         repo_url=sample_issue_data.repo_url,
         branch_name="feature/issue_123",
         status=TaskStatus.PENDING,
-        workspace_path=f"{settings.OPENCODE_BASE_DIR}/issue_123",
+        workspace_path=str(settings.opencode_base_path / "issue_123"),
     )
 
 
 @pytest.fixture
 def temp_workspace() -> Generator[str, None, None]:
-    workspace_path = f"{settings.OPENCODE_BASE_DIR}/test_issue"
+    workspace_path = str(settings.opencode_base_path / "test_issue")
     yield workspace_path
     if Path(workspace_path).exists():
         shutil.rmtree(workspace_path, ignore_errors=True)

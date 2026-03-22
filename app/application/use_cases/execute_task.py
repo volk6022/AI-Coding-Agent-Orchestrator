@@ -24,7 +24,7 @@ async def execute_coding_task(
     telegram: ITelegramNotifier,
 ) -> None:
     idle_timeout = settings.IDLE_TIMEOUT
-    workspace_path = f"{settings.OPENCODE_BASE_DIR}/issue_{issue_data.issue_number}"
+    workspace_path = str(settings.opencode_base_path / f"issue_{issue_data.issue_number}")
     branch_name = f"feature/issue_{issue_data.issue_number}"
 
     task_state = TaskState(
