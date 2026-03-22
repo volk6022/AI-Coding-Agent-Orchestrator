@@ -21,7 +21,7 @@ async def test_workspace_cleanup_on_clone_failure(
     from app.infrastructure.vcs.git_cli import GitCLIClient
 
     git_client = GitCLIClient()
-    git_client.clone_ssh = AsyncMock(side_effect=RuntimeError("Clone failed"))
+    git_client.clone = AsyncMock(side_effect=RuntimeError("Clone failed"))
 
     workspace_path = f"{settings.OPENCODE_BASE_DIR}/issue_{sample_issue_data.issue_number}"
     Path(workspace_path).mkdir(parents=True, exist_ok=True)
@@ -151,7 +151,7 @@ async def test_pr_creation_after_task_completion(
         telegram=mock_telegram,
     )
 
-    mock_git_client.commit_and_push_ssh.assert_called_once()
+    mock_git_client.commit_and_push.assert_called_once()
     mock_github_client.create_pull_request.assert_called_once()
     mock_telegram.send_message.assert_called()
 

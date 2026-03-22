@@ -40,7 +40,7 @@ async def test_execute_coding_task_full_flow(
         telegram=mock_telegram,
     )
 
-    mock_git_client.clone_ssh.assert_called_once()
+    mock_git_client.clone.assert_called_once()
     mock_git_client.create_branch.assert_called_once()
     mock_oc_manager.spawn_server.assert_called_once()
     mock_db.create_task.assert_called_once()

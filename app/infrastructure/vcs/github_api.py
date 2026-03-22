@@ -15,6 +15,11 @@ def _to_ssh_url(repo: str) -> str:
     return f"git@github.com:{repo}.git"
 
 
+def _to_https_url(repo: str) -> str:
+    """Convert 'owner/repo' to 'https://x-access-token:<TOKEN>@github.com/owner/repo.git'"""
+    return f"https://x-access-token:{settings.GITHUB_TOKEN}@github.com/{repo}.git"
+
+
 class GitHubAPIClient(IGitHubClient):
     def __init__(self):
         self._client = httpx.AsyncClient(
@@ -79,6 +84,11 @@ class GitHubAPIClient(IGitHubClient):
             sender=data.get("user", {}).get("login", ""),
             owner=repo.split("/")[0],
         )
+
+    def get_clone_url(self, repo: str) -> str:
+        if settings.GIT_TRANSPORT == "ssh":
+            return _to_ssh_url(repo)
+        return _to_https_url(repo)
 
     def get_ssh_url(self, repo: str) -> str:
         return _to_ssh_url(repo)

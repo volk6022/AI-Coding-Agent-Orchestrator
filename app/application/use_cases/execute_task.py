@@ -39,8 +39,8 @@ async def execute_coding_task(
     async with AsyncExitStack() as stack:
         stack.push_async_callback(git.cleanup_workspace, workspace_path)
 
-        ssh_url = github.get_ssh_url(issue_data.repo_url)
-        await git.clone_ssh(ssh_url, workspace_path)
+        clone_url = github.get_clone_url(issue_data.repo_url)
+        await git.clone(clone_url, workspace_path)
         await git.create_branch(workspace_path, branch_name)
 
         oc_process = await oc_manager.spawn_server(workspace_path)
@@ -132,7 +132,7 @@ async def execute_coding_task(
             return
 
         if task_completed:
-            await git.commit_and_push_ssh(
+            await git.commit_and_push(
                 workspace_path,
                 f"Fix #{issue_data.issue_number}",
                 branch_name,

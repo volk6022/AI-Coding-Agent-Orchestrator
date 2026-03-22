@@ -10,7 +10,7 @@ logger = get_logger(component="git_cli")
 
 
 class GitCLIClient(ILocalGitClient):
-    async def clone_ssh(self, repo_url: str, workspace_path: str) -> None:
+    async def clone(self, repo_url: str, workspace_path: str) -> None:
         logger.info("cloning_repo", repo_url=repo_url, path=workspace_path)
 
         parent_dir = Path(workspace_path).parent
@@ -21,7 +21,8 @@ class GitCLIClient(ILocalGitClient):
             shutil.rmtree(workspace_path, ignore_errors=True)
 
         env = os.environ.copy()
-        env["GIT_SSH_COMMAND"] = "ssh -o StrictHostKeyChecking=no"
+        if repo_url.startswith("git@"):
+            env["GIT_SSH_COMMAND"] = "ssh -o StrictHostKeyChecking=no"
 
         process = await asyncio.create_subprocess_exec(
             "git",
@@ -45,7 +46,8 @@ class GitCLIClient(ILocalGitClient):
         logger.info("creating_branch", workspace_path=workspace_path, branch=branch_name)
 
         env = os.environ.copy()
-        env["GIT_SSH_COMMAND"] = "ssh -o StrictHostKeyChecking=no"
+        # Note: Branch operations don't usually need SSH unless they touch the remote
+        # but we'll keep it safe.
 
         process = await asyncio.create_subprocess_exec(
             "git",
@@ -66,13 +68,31 @@ class GitCLIClient(ILocalGitClient):
 
         logger.info("branch_created", branch=branch_name)
 
-    async def commit_and_push_ssh(
+    async def commit_and_push(
         self, workspace_path: str, commit_message: str, branch_name: str
     ) -> None:
         logger.info("commit_and_push", workspace_path=workspace_path, branch=branch_name)
 
         env = os.environ.copy()
-        env["GIT_SSH_COMMAND"] = "ssh -o StrictHostKeyChecking=no"
+        # Check if origin uses SSH
+        # We can just check the repo_url pattern or just always set it if needed.
+        # Actually, if the clone was HTTPS with token, push will just work.
+
+        # We'll try to find out the current remote URL to decide
+        process_remote = await asyncio.create_subprocess_exec(
+            "git",
+            "remote",
+            "get-url",
+            "origin",
+            cwd=workspace_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout_remote, _ = await process_remote.communicate()
+        remote_url = stdout_remote.decode().strip()
+
+        if remote_url.startswith("git@"):
+            env["GIT_SSH_COMMAND"] = "ssh -o StrictHostKeyChecking=no"
 
         commands = [
             ("git", ["add", "-A"]),

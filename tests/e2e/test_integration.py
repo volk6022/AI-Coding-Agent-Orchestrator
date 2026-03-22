@@ -35,9 +35,7 @@ def mock_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     """Override settings for testing with shorter timeouts."""
     monkeypatch.setattr(settings, "IDLE_TIMEOUT", 2)
     monkeypatch.setattr(settings, "MAX_CONCURRENT_INSTANCES", 2)
-    monkeypatch.setattr(
-        settings, "OPENCODE_BASE_DIR", tempfile.gettempdir() + "/test_workspaces"
-    )
+    monkeypatch.setattr(settings, "OPENCODE_BASE_DIR", tempfile.gettempdir() + "/test_workspaces")
 
 
 @pytest.fixture
@@ -106,9 +104,7 @@ class MockOpenCodeClient:
     async def send_reply(self, session_id: str, message: str) -> None:
         self._replies_sent.append(message)
 
-    async def listen_events(
-        self, session_id: str
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    async def listen_events(self, session_id: str) -> AsyncGenerator[Dict[str, Any], None]:
         async for event in MockOpenCodeEventStream(self._events):
             yield event
 
@@ -142,7 +138,7 @@ class MockGitCLIClient:
     def configure_fail_push(self, should_fail: bool = True) -> None:
         self._should_fail_push = should_fail
 
-    async def clone_ssh(self, repo_url: str, workspace_path: str) -> None:
+    async def clone(self, repo_url: str, workspace_path: str) -> None:
         self.clone_calls.append((repo_url, workspace_path))
         if self._should_fail_clone:
             raise RuntimeError("Git clone failed: Repository not found")
@@ -153,7 +149,7 @@ class MockGitCLIClient:
     async def create_branch(self, workspace_path: str, branch_name: str) -> None:
         self.branch_calls.append((workspace_path, branch_name))
 
-    async def commit_and_push_ssh(
+    async def commit_and_push(
         self, workspace_path: str, commit_message: str, branch_name: str
     ) -> None:
         if self._should_fail_push:
@@ -181,7 +177,7 @@ class MockGitHubAPIClient:
     def configure_fail_pr(self, should_fail: bool = True) -> None:
         self._should_fail_pr = should_fail
 
-    def get_ssh_url(self, repo: str) -> str:
+    def get_clone_url(self, repo: str) -> str:
         return f"git@github.com:{repo}.git"
 
     async def post_comment(self, issue_number: int, body: str, repo: str) -> None:

@@ -17,6 +17,8 @@ class Settings(BaseSettings):
 
     REDIS_URL: str = "redis://localhost:6379"
 
+    GIT_TRANSPORT: str = "https"  # "https" or "ssh"
+
     OPENCODE_BASE_DIR: str = "/tmp/workspaces"
     OPENCODE_HOST: str = "127.0.0.1"
     OPENCODE_CLI_NAME: str = "opencode"
