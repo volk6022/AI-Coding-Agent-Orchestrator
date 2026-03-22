@@ -24,7 +24,7 @@ async def execute_coding_task(
     telegram: ITelegramNotifier,
 ) -> None:
     idle_timeout = settings.IDLE_TIMEOUT
-    workspace_path = f"{settings.OPENCODE_BASE_DIR}/issue_{issue_data.issue_number}"
+    workspace_path = str(settings.opencode_base_path / f"issue_{issue_data.issue_number}")
     branch_name = f"feature/issue_{issue_data.issue_number}"
 
     task_state = TaskState(
@@ -39,8 +39,8 @@ async def execute_coding_task(
     async with AsyncExitStack() as stack:
         stack.push_async_callback(git.cleanup_workspace, workspace_path)
 
-        ssh_url = github.get_ssh_url(issue_data.repo_url)
-        await git.clone_ssh(ssh_url, workspace_path)
+        clone_url = github.get_clone_url(issue_data.repo_url)
+        await git.clone(clone_url, workspace_path)
         await git.create_branch(workspace_path, branch_name)
 
         oc_process = await oc_manager.spawn_server(workspace_path)
@@ -69,14 +69,12 @@ async def execute_coding_task(
         await oc_client.send_message(session_id, system_prompt)
 
         task_completed = False
+        # Accumulate the last assistant message text from message.updated events.
+        # On session.idle we inspect this text to decide next action.
+        last_assistant_text: str = ""
 
         try:
             async with asyncio.timeout(idle_timeout):
-                # We use a while loop with a break to allow re-checking for ABORTED
-                # but we must ensure we don't start a fresh listener every time if it finishes.
-                # Actually, SSE should be one long stream.
-                # If it ends, something is likely wrong or finished.
-
                 async for event in oc_client.listen_events(session_id):
                     # Periodically check for external abort status inside the SSE stream
                     current_state = await db.get_task_state(issue_data.issue_number)
@@ -87,15 +85,39 @@ async def execute_coding_task(
                         )
                         return
 
-                    event_name = event.get("event_name", "")
-                    data = event.get("data", {})
+                    # OpenCode Server API events use {"type": "...", "properties": {...}}
+                    event_type = event.get("type", "")
+                    properties = event.get("properties", {})
 
-                    if event_name == "message_completed" and not data.get("has_commands"):
-                        text = data.get("text", "")
+                    if event_type == "message.updated":
+                        # Accumulate assistant message text from completed messages.
+                        # AssistantMessage has time.completed set when it is done.
+                        info = properties.get("info", {})
+                        role = info.get("role", "")
+                        if role == "assistant":
+                            time_info = info.get("time", {})
+                            if time_info.get("completed"):
+                                # Extract text from parts
+                                parts = info.get("parts", [])
+                                text_parts = [
+                                    p.get("text", "") for p in parts if p.get("type") == "text"
+                                ]
+                                last_assistant_text = "\n".join(text_parts).strip()
+                                logger.info(
+                                    "assistant_message_updated",
+                                    session_id=session_id,
+                                    text_preview=last_assistant_text[:100],
+                                )
+
+                    elif event_type == "session.idle":
+                        # Agent has finished its current turn. Evaluate the response.
+                        text = last_assistant_text
                         if "[TASK_COMPLETED]" in text:
                             task_completed = True
                             break
-                        else:
+                        elif text:
+                            # Agent produced output but did not signal completion —
+                            # treat it as a question/reply request.
                             await github.post_comment(
                                 issue_data.issue_number,
                                 f"**Agent:**\n{text}",
@@ -110,11 +132,18 @@ async def execute_coding_task(
                             await telegram.send_message(
                                 f"Agent asked a question in Issue #{issue_data.issue_number}"
                             )
+                            # Reset accumulator and keep listening for the next turn
+                            last_assistant_text = ""
 
-                    elif event_name == "error":
-                        error_msg = data.get("message", "Unknown error")
+                    elif event_type == "session.error":
+                        error = properties.get("error", {})
+                        error_msg = (
+                            error.get("message", "Unknown error")
+                            if isinstance(error, dict)
+                            else str(error)
+                        )
+                        logger.error("session_error", session_id=session_id, error=error_msg)
                         await telegram.send_message(f"OpenCode Error: {error_msg}")
-                        # We break the async for, which will lead us out of the try block
                         break
 
         except TimeoutError:
@@ -132,7 +161,7 @@ async def execute_coding_task(
             return
 
         if task_completed:
-            await git.commit_and_push_ssh(
+            await git.commit_and_push(
                 workspace_path,
                 f"Fix #{issue_data.issue_number}",
                 branch_name,

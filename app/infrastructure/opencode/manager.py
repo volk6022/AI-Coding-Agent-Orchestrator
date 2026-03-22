@@ -26,8 +26,9 @@ class OpenCodeProcessManager(IOpenCodeProcessManager):
             "serve",
             "--port",
             "0",
-            "--dir",
-            workspace_path,
+            "--hostname",
+            settings.OPENCODE_HOST,
+            cwd=workspace_path,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -59,10 +60,11 @@ class OpenCodeProcessManager(IOpenCodeProcessManager):
             if not line:
                 raise RuntimeError("OpenCode server failed to start - no output")
 
-            decoded = line.decode()
+            decoded = line.decode().strip()
             logger.debug("opencode_output", line=decoded)
 
-            match = re.search(r"port[:\s]+(\d+)", decoded, re.IGNORECASE)
+            # Match either "port: 1234" or "listening on http://127.0.0.1:1234"
+            match = re.search(r"(?:port[:\s]+|:)(\d{4,5})", decoded, re.IGNORECASE)
             if match:
                 return int(match.group(1))
 

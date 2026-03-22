@@ -7,7 +7,7 @@ from app.domain.entities import IssueData, OpenCodeProcess, TaskState
 
 class ILocalGitClient(ABC):
     @abstractmethod
-    async def clone_ssh(self, repo_url: str, workspace_path: str) -> None:
+    async def clone(self, repo_url: str, workspace_path: str) -> None:
         pass
 
     @abstractmethod
@@ -15,7 +15,7 @@ class ILocalGitClient(ABC):
         pass
 
     @abstractmethod
-    async def commit_and_push_ssh(
+    async def commit_and_push(
         self, workspace_path: str, commit_message: str, branch_name: str
     ) -> None:
         pass
@@ -41,7 +41,11 @@ class IGitHubClient(ABC):
         pass
 
     @abstractmethod
-    def get_ssh_url(self, repo: str) -> str:
+    def get_clone_url(self, repo: str) -> str:
+        pass
+
+    @abstractmethod
+    async def close(self) -> None:
         pass
 
 
@@ -80,6 +84,10 @@ class IOpenCodeClient(ABC):
 class ITelegramNotifier(ABC):
     @abstractmethod
     async def send_message(self, text: str) -> None:
+        pass
+
+    @abstractmethod
+    async def close(self) -> None:
         pass
 
 

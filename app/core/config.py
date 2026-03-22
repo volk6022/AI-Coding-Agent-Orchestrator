@@ -1,3 +1,4 @@
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,9 +18,18 @@ class Settings(BaseSettings):
 
     REDIS_URL: str = "redis://localhost:6379"
 
-    OPENCODE_BASE_DIR: str = "/tmp/workspaces"
+    GIT_TRANSPORT: str = "https"  # "https" or "ssh"
+
+    OPENCODE_BASE_DIR: str = "workspaces"
     OPENCODE_HOST: str = "127.0.0.1"
     OPENCODE_CLI_NAME: str = "opencode"
+
+    @property
+    def opencode_base_path(self) -> Path:
+        path = Path(self.OPENCODE_BASE_DIR)
+        if not path.is_absolute():
+            return path.resolve()
+        return path
 
 
 settings = Settings()
