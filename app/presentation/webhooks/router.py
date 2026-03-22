@@ -154,10 +154,10 @@ async def handle_issue_event(
         owner=repo.split("/")[0] if repo else "",
     )
 
-    from app.presentation.workers.broker import broker
+    from app.presentation.workers.broker import execute_task
     from dataclasses import asdict
 
-    await broker.execute_task.send(asdict(issue_data))
+    await execute_task.kiq(asdict(issue_data))
 
     return {"status": "queued", "issue_number": issue_number}
 

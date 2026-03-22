@@ -23,7 +23,7 @@ _concurrency_semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_INSTANCES)
 
 
 @broker.on_event(TaskiqEvents.WORKER_STARTUP)
-async def on_worker_start():
+async def on_worker_start(*args: Any, **kwargs: Any) -> None:
     logger.info("worker_started")
 
 

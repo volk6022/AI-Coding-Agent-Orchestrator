@@ -50,7 +50,7 @@ async def setup_telegram_commands():
             "/start - Show this message\n"
             "/status - Show bot status\n"
             "/list - List active tasks\n"
-            "/cancel <issue_number> - Cancel a task"
+            "/cancel &lt;issue_number&gt; - Cancel a task"
         )
 
     @dp.message(Command("status"))
@@ -114,7 +114,7 @@ async def setup_telegram_commands():
 
         parts = message.text.split()
         if len(parts) < 2:
-            await message.answer("Usage: /cancel <issue_number>")
+            await message.answer("Usage: /cancel &lt;issue_number&gt;")
             return
 
         try:
@@ -169,7 +169,8 @@ class TelegramNotifier(ITelegramNotifier):
         logger.info("sending_telegram_message", owner_id=self._owner_id)
 
         try:
-            await self.bot.send_message(chat_id=self._owner_id, text=text)
+            # We use parse_mode=None here to treat the message as plain text and avoid HTML parsing errors
+            await self.bot.send_message(chat_id=self._owner_id, text=text, parse_mode=None)
             logger.info("telegram_message_sent")
         except Exception as e:
             logger.error("telegram_send_failed", error=str(e))

@@ -15,6 +15,9 @@ logger = get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting AI Orchestrator")
+    from app.presentation.workers.broker import broker
+
+    await broker.startup()
     await init_db()
     logger.info("Database initialized")
 
@@ -35,6 +38,7 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("Shutting down AI Orchestrator")
+    await broker.shutdown()
 
 
 app = FastAPI(
