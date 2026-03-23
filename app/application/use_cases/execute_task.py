@@ -69,9 +69,8 @@ async def execute_coding_task(
         await oc_client.send_message(session_id, system_prompt)
 
         task_completed = False
-        # Accumulate the last assistant message text from message.updated events.
-        # On session.idle we inspect this text to decide next action.
         last_assistant_text: str = ""
+        assistant_msg_ids = set()
 
         try:
             async with asyncio.timeout(idle_timeout):
@@ -90,24 +89,22 @@ async def execute_coding_task(
                     properties = event.get("properties", {})
 
                     if event_type == "message.updated":
-                        # Accumulate assistant message text from completed messages.
-                        # AssistantMessage has time.completed set when it is done.
                         info = properties.get("info", {})
-                        role = info.get("role", "")
-                        if role == "assistant":
-                            time_info = info.get("time", {})
-                            if time_info.get("completed"):
-                                # Extract text from parts
-                                parts = info.get("parts", [])
-                                text_parts = [
-                                    p.get("text", "") for p in parts if p.get("type") == "text"
-                                ]
-                                last_assistant_text = "\n".join(text_parts).strip()
-                                logger.info(
-                                    "assistant_message_updated",
-                                    session_id=session_id,
-                                    text_preview=last_assistant_text[:100],
-                                )
+                        if info.get("role") == "assistant":
+                            assistant_msg_ids.add(info.get("id"))
+
+                    elif event_type == "message.part.updated":
+                        part = properties.get("part", {})
+                        if (
+                            part.get("messageID") in assistant_msg_ids
+                            and part.get("type") == "text"
+                        ):
+                            last_assistant_text += part.get("text", "") + "\n"
+                            logger.info(
+                                "assistant_message_part",
+                                session_id=session_id,
+                                text_preview=last_assistant_text[:100],
+                            )
 
                     elif event_type == "session.idle":
                         # Agent has finished its current turn. Evaluate the response.

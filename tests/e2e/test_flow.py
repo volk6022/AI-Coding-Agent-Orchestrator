@@ -22,8 +22,54 @@ async def test_execute_coding_task_full_flow(
     mock_oc_manager.spawn_server.return_value = mock_oc_process
 
     async def mock_listen_events(session_id):
-        yield {"event_name": "message_completed", "data": {"text": "Working on it..."}}
-        yield {"event_name": "message_completed", "data": {"text": "[TASK_COMPLETED]"}}
+        yield {
+            "type": "message.updated",
+            "properties": {
+                "info": {
+                    "id": "msg_1",
+                    "role": "assistant",
+                    "time": {"completed": 12345},
+                }
+            },
+        }
+        yield {
+            "type": "message.part.updated",
+            "properties": {
+                "part": {
+                    "messageID": "msg_1",
+                    "type": "text",
+                    "text": "Working on it...",
+                }
+            },
+        }
+        yield {
+            "type": "session.idle",
+            "properties": {},
+        }
+        yield {
+            "type": "message.updated",
+            "properties": {
+                "info": {
+                    "id": "msg_2",
+                    "role": "assistant",
+                    "time": {"completed": 12345},
+                }
+            },
+        }
+        yield {
+            "type": "message.part.updated",
+            "properties": {
+                "part": {
+                    "messageID": "msg_2",
+                    "type": "text",
+                    "text": "[TASK_COMPLETED]",
+                }
+            },
+        }
+        yield {
+            "type": "session.idle",
+            "properties": {},
+        }
 
     mock_oc_client = MagicMock()
     mock_oc_client.create_session = AsyncMock(return_value="session_abc")
@@ -60,12 +106,52 @@ async def test_agent_asks_question_creates_github_comment(
 
     async def mock_listen_events(session_id):
         yield {
-            "event_name": "message_completed",
-            "data": {"text": "Need clarification?", "has_commands": False},
+            "type": "message.updated",
+            "properties": {
+                "info": {
+                    "id": "msg_1",
+                    "role": "assistant",
+                    "time": {"completed": 12345},
+                }
+            },
         }
         yield {
-            "event_name": "message_completed",
-            "data": {"text": "[TASK_COMPLETED]", "has_commands": False},
+            "type": "message.part.updated",
+            "properties": {
+                "part": {
+                    "messageID": "msg_1",
+                    "type": "text",
+                    "text": "Need clarification?",
+                }
+            },
+        }
+        yield {
+            "type": "session.idle",
+            "properties": {},
+        }
+        yield {
+            "type": "message.updated",
+            "properties": {
+                "info": {
+                    "id": "msg_2",
+                    "role": "assistant",
+                    "time": {"completed": 12345},
+                }
+            },
+        }
+        yield {
+            "type": "message.part.updated",
+            "properties": {
+                "part": {
+                    "messageID": "msg_2",
+                    "type": "text",
+                    "text": "[TASK_COMPLETED]",
+                }
+            },
+        }
+        yield {
+            "type": "session.idle",
+            "properties": {},
         }
 
     mock_oc_client = MagicMock()

@@ -11,7 +11,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any, AsyncGenerator, Dict, List
+from typing import Any, AsyncGenerator, Dict, List, Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -278,7 +278,7 @@ async def mock_db(db_session: None) -> StateRepository:
 
 
 @pytest.fixture(scope="session")
-def event_loop() -> asyncio.AbstractEventLoop:
+def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
     loop = asyncio.new_event_loop()
     yield loop
     loop.close()
@@ -298,18 +298,52 @@ def create_standard_success_events() -> List[Dict[str, Any]]:
     """Create a standard sequence of events for successful task completion."""
     return [
         {
-            "event_name": "message_completed",
-            "data": {
-                "text": "I'll start working on this task.",
-                "has_commands": False,
+            "type": "message.updated",
+            "properties": {
+                "info": {
+                    "id": "msg_1",
+                    "role": "assistant",
+                    "time": {"completed": 123456789},
+                }
             },
         },
         {
-            "event_name": "message_completed",
-            "data": {
-                "text": "I've implemented the feature. [TASK_COMPLETED]",
-                "has_commands": False,
+            "type": "message.part.updated",
+            "properties": {
+                "part": {
+                    "messageID": "msg_1",
+                    "type": "text",
+                    "text": "I'll start working on this task.",
+                }
             },
+        },
+        {
+            "type": "session.idle",
+            "properties": {},
+        },
+        {
+            "type": "message.updated",
+            "properties": {
+                "info": {
+                    "id": "msg_2",
+                    "role": "assistant",
+                    "time": {"completed": 123456790},
+                }
+            },
+        },
+        {
+            "type": "message.part.updated",
+            "properties": {
+                "part": {
+                    "messageID": "msg_2",
+                    "type": "text",
+                    "text": "I've implemented the feature. [TASK_COMPLETED]",
+                }
+            },
+        },
+        {
+            "type": "session.idle",
+            "properties": {},
         },
     ]
 
@@ -318,18 +352,52 @@ def create_question_then_complete_events() -> List[Dict[str, Any]]:
     """Create events where agent asks a question before completing."""
     return [
         {
-            "event_name": "message_completed",
-            "data": {
-                "text": "I need clarification on the requirements.",
-                "has_commands": False,
+            "type": "message.updated",
+            "properties": {
+                "info": {
+                    "id": "msg_1",
+                    "role": "assistant",
+                    "time": {"completed": 123456789},
+                }
             },
         },
         {
-            "event_name": "message_completed",
-            "data": {
-                "text": "Thanks for the clarification. [TASK_COMPLETED]",
-                "has_commands": False,
+            "type": "message.part.updated",
+            "properties": {
+                "part": {
+                    "messageID": "msg_1",
+                    "type": "text",
+                    "text": "I need clarification on the requirements.",
+                }
             },
+        },
+        {
+            "type": "session.idle",
+            "properties": {},
+        },
+        {
+            "type": "message.updated",
+            "properties": {
+                "info": {
+                    "id": "msg_2",
+                    "role": "assistant",
+                    "time": {"completed": 123456790},
+                }
+            },
+        },
+        {
+            "type": "message.part.updated",
+            "properties": {
+                "part": {
+                    "messageID": "msg_2",
+                    "type": "text",
+                    "text": "Thanks for the clarification. [TASK_COMPLETED]",
+                }
+            },
+        },
+        {
+            "type": "session.idle",
+            "properties": {},
         },
     ]
 
@@ -338,8 +406,8 @@ def create_error_events() -> List[Dict[str, Any]]:
     """Create events that simulate an error."""
     return [
         {
-            "event_name": "error",
-            "data": {"message": "OpenCode server encountered an error"},
+            "type": "session.error",
+            "properties": {"error": {"message": "OpenCode server encountered an error"}},
         },
     ]
 
@@ -684,8 +752,18 @@ class TestE2EDatabasePersistence:
         """Test that task state is properly persisted throughout execution."""
         events = [
             {
-                "event_name": "message_completed",
-                "data": {"text": "Starting...", "has_commands": False},
+                "type": "message.updated",
+                "properties": {
+                    "info": {
+                        "role": "assistant",
+                        "time": {"completed": 1234},
+                        "parts": [{"type": "text", "text": "Starting..."}],
+                    }
+                },
+            },
+            {
+                "type": "session.idle",
+                "properties": {},
             },
         ]
         mock_oc_manager.configure_client_events(events)

@@ -39,9 +39,10 @@ class OpenCodeClient(IOpenCodeClient):
     async def send_message(self, session_id: str, message: str) -> None:
         logger.info("sending_message", session_id=session_id)
 
-        # API requires {"parts": [{"type": "text", "text": "..."}]}
+        # Use prompt_async so we don't block waiting for the LLM response.
+        # We will receive updates via the SSE /event stream instead.
         response = await self._client.post(
-            f"{self.base_url}/session/{session_id}/message",
+            f"{self.base_url}/session/{session_id}/prompt_async",
             json={"parts": [{"type": "text", "text": message}]},
         )
         response.raise_for_status()
@@ -49,9 +50,10 @@ class OpenCodeClient(IOpenCodeClient):
     async def send_reply(self, session_id: str, message: str) -> None:
         logger.info("sending_reply", session_id=session_id)
 
-        # API requires {"parts": [{"type": "text", "text": "..."}]}
+        # Use prompt_async so we don't block waiting for the LLM response.
+        # We will receive updates via the SSE /event stream instead.
         response = await self._client.post(
-            f"{self.base_url}/session/{session_id}/message",
+            f"{self.base_url}/session/{session_id}/prompt_async",
             json={"parts": [{"type": "text", "text": message}]},
         )
         response.raise_for_status()

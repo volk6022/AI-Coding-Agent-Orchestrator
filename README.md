@@ -117,10 +117,10 @@ uv sync
 redis-server &
 
 # Start the web server
-uvicorn main:app --reload
+uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 # Start the task worker (in a separate terminal)
-taskiq worker app.presentation.workers.broker:broker --workers 3
+uv run taskiq worker app.presentation.workers.broker:broker --workers 3
 ```
 
 ### 5. Connecting GitHub Repository
