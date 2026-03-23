@@ -1,8 +1,9 @@
 <!--
 <sync_impact_report>
-- Version change: 1.0.0 → 1.1.0
+- Version change: 1.1.0 → 1.2.0
 - List of modified principles:
-  - Added PRINCIPLE_6: Human-in-the-Loop Orchestration (Management & Approval)
+  - Added PRINCIPLE_7: Multi-Repository & Multi-Tenant Support
+  - Updated Security & Configuration Requirements
 - Added sections: None
 - Removed sections: None
 - Templates requiring updates:
@@ -35,9 +36,12 @@ The system must provide real-time observability via structured logging and autom
 ### VI. Human-in-the-Loop Orchestration (Management & Approval)
 Agent sessions MUST NOT start autonomously; they require explicit manual approval from the user via the Telegram bot. The bot acts as the primary management interface, allowing the user to intercept, modify, append instructions, and specify target files before forwarding the prompt to the OpenCode server. While the bot handles interactive management, the GitHub server remains the ultimate source of truth, and all change histories must be preserved there. The system must also expose administrative commands via the bot (e.g., `/logs <issue_number>` and `/retry <issue_number>`) for ongoing task observability and recovery.
 
+### VII. Multi-Repository & Multi-Tenant Support
+The Orchestrator MUST be designed to handle an arbitrary number of connected repositories simultaneously, rather than being hardcoded or configured for a single project. The system must process webhooks from multiple repositories (or organizational webhooks), correctly attribute tasks to their source repository, and execute them in fully isolated workspaces, ensuring cross-repository boundaries are strictly maintained.
+
 ## Security & Configuration Requirements
 
-- GitHub Webhook signatures MUST be verified using `GITHUB_WEBHOOK_SECRET`.
+- GitHub Webhook signatures MUST be securely verified (supporting single or multiple secrets depending on configuration/deployment).
 - Telegram interactive commands MUST be restricted to the authenticated `TELEGRAM_OWNER_ID`.
 - Sensitive information (API tokens, secrets, credentials) MUST NOT be committed to the repository, logged in plain text, or exposed in error messages.
 - Configuration must be managed centrally via `app/core/config.py` using Pydantic Settings, with `.env` as the local override.
@@ -59,4 +63,4 @@ Agent sessions MUST NOT start autonomously; they require explicit manual approva
     - PATCH: Clarifications, wording improvements, and non-semantic refinements.
 - Every Pull Request and feature implementation plan must include a "Constitution Check" to verify compliance.
 
-**Version**: 1.1.0 | **Ratified**: 2026-03-23 | **Last Amended**: 2026-03-23
+**Version**: 1.2.0 | **Ratified**: 2026-03-23 | **Last Amended**: 2026-03-23
