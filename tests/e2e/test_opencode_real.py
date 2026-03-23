@@ -11,15 +11,15 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any, AsyncGenerator
+from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
 
 from app.application.use_cases.execute_task import execute_coding_task
 from app.core.config import settings
-from app.domain.entities import IssueData, TaskState, TaskStatus
-from app.infrastructure.db.database import async_session_maker, init_db
+from app.domain.entities import IssueData, TaskStatus
+from app.infrastructure.db.database import init_db
 from app.infrastructure.db.repository import StateRepository
 from app.infrastructure.opencode.manager import OpenCodeProcessManager
 from app.infrastructure.vcs.git_cli import GitCLIClient
@@ -200,7 +200,7 @@ async def test_real_opencode_server_interaction(db_session, monkeypatch):
     )
 
     # Verify task completed successfully or waited for reply (if LLM is not configured properly but still replied with an error text)
-    task_state = await mock_db.get_task_state(issue_data.issue_number)
+    task_state = await mock_db.get_task_state(issue_data.issue_number, issue_data.repo_url)
     assert task_state is not None
     assert task_state.status in (TaskStatus.DONE, TaskStatus.WAITING_REPLY, TaskStatus.ABORTED), (
         f"Expected DONE or WAITING_REPLY, but got {task_state.status}. Telegram messages: {mock_telegram.messages_sent}"

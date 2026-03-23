@@ -1,7 +1,6 @@
 from typing import Optional
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities import TaskState, TaskStatus
 from app.domain.interfaces import IStateRepository
@@ -12,12 +11,15 @@ class StateRepository(IStateRepository):
     async def set_active_instance(
         self,
         issue_number: int,
+        repo_url: str,
         port: Optional[int],
         session_id: Optional[str] = None,
         status: Optional[str] = None,
     ) -> None:
         async with async_session_maker() as session:
-            stmt = select(TaskStateModel).where(TaskStateModel.issue_number == issue_number)
+            stmt = select(TaskStateModel).where(
+                TaskStateModel.issue_number == issue_number, TaskStateModel.repo_url == repo_url
+            )
             result = await session.execute(stmt)
             task = result.scalar_one_or_none()
 
@@ -29,9 +31,11 @@ class StateRepository(IStateRepository):
                     task.status = TaskStatus(status)
                 await session.commit()
 
-    async def get_task_state(self, issue_number: int) -> Optional[TaskState]:
+    async def get_task_state(self, issue_number: int, repo_url: str) -> Optional[TaskState]:
         async with async_session_maker() as session:
-            stmt = select(TaskStateModel).where(TaskStateModel.issue_number == issue_number)
+            stmt = select(TaskStateModel).where(
+                TaskStateModel.issue_number == issue_number, TaskStateModel.repo_url == repo_url
+            )
             result = await session.execute(stmt)
             task = result.scalar_one_or_none()
 
@@ -50,7 +54,8 @@ class StateRepository(IStateRepository):
     async def create_task(self, task_state: TaskState) -> None:
         async with async_session_maker() as session:
             stmt = select(TaskStateModel).where(
-                TaskStateModel.issue_number == task_state.issue_number
+                TaskStateModel.issue_number == task_state.issue_number,
+                TaskStateModel.repo_url == task_state.repo_url,
             )
             result = await session.execute(stmt)
             existing = result.scalar_one_or_none()

@@ -1,4 +1,3 @@
-import asyncio
 from typing import Optional
 
 from aiogram import Bot, Dispatcher
@@ -36,7 +35,6 @@ def get_telegram_dispatcher() -> Dispatcher:
 
 
 async def setup_telegram_commands():
-    bot = get_telegram_bot()
     dp = get_telegram_dispatcher()
 
     @dp.message(Command("start"))
@@ -59,8 +57,6 @@ async def setup_telegram_commands():
             await message.answer("Unauthorized")
             return
 
-        from app.presentation.workers.broker import broker
-
         await message.answer(
             f"Bot Status:\n"
             f"- Redis: {settings.REDIS_URL}\n"
@@ -74,7 +70,6 @@ async def setup_telegram_commands():
             await message.answer("Unauthorized")
             return
 
-        from app.infrastructure.db.repository import StateRepository
         from app.infrastructure.db.database import async_session_maker
         from sqlalchemy import select
         from app.infrastructure.db.database import TaskStateModel
@@ -100,7 +95,7 @@ async def setup_telegram_commands():
             }.get(task.status, "❓")
 
             task_list.append(
-                f"{status_emoji} Issue #{task.issue_number}: {task.status.value} "
+                f"{status_emoji} Issue #{task.issue_number} ({task.repo_url}): {task.status.value} "
                 f"(port: {task.active_port or 'N/A'})"
             )
 
@@ -123,7 +118,6 @@ async def setup_telegram_commands():
             await message.answer("Invalid issue number")
             return
 
-        from app.infrastructure.db.repository import StateRepository
         from app.infrastructure.db.database import async_session_maker
         from sqlalchemy import select
         from app.infrastructure.db.database import TaskStateModel
@@ -131,18 +125,33 @@ async def setup_telegram_commands():
         async with async_session_maker() as session:
             stmt = select(TaskStateModel).where(TaskStateModel.issue_number == issue_number)
             result = await session.execute(stmt)
-            task = result.scalar_one_or_none()
+            tasks = result.scalars().all()
 
-        if not task:
+        if not tasks:
             await message.answer(f"No task found for issue #{issue_number}")
             return
 
+        if len(tasks) > 1 and len(parts) < 3:
+            # Need repo qualification
+            await message.answer(
+                f"Multiple tasks found for issue #{issue_number}. Please specify the repository: /cancel &lt;issue_number&gt; &lt;repo_url&gt;"
+            )
+            return
+
+        if len(parts) >= 3:
+            repo_url = parts[2]
+            tasks = [t for t in tasks if t.repo_url == repo_url]
+            if not tasks:
+                await message.answer(f"No task found for issue #{issue_number} in {repo_url}")
+                return
+
+        task = tasks[0]
         task.status = TaskStatus.ABORTED
         async with async_session_maker() as session:
             session.add(task)
             await session.commit()
 
-        await message.answer(f"Task #{issue_number} marked as aborted")
+        await message.answer(f"Task #{issue_number} ({task.repo_url}) marked as aborted")
 
     logger.info("telegram_commands_setupped")
 

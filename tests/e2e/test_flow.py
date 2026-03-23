@@ -2,7 +2,6 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-import pytest_asyncio
 
 from app.application.use_cases.execute_task import execute_coding_task
 from app.application.use_cases.handle_reply import handle_user_reply
@@ -179,7 +178,6 @@ async def test_handle_user_reply_routes_to_active_session(
     mock_db: MagicMock,
     mock_telegram: MagicMock,
 ):
-    from app.infrastructure.db.repository import StateRepository
     from app.domain.entities import TaskState
 
     mock_task_state = TaskState(
@@ -198,6 +196,7 @@ async def test_handle_user_reply_routes_to_active_session(
 
     await handle_user_reply(
         issue_number=123,
+        repo_url="owner/repo",
         comment_body="Here's the clarification you needed",
         oc_manager=mock_oc_manager,
         db=mock_db,

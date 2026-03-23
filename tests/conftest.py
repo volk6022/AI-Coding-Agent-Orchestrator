@@ -1,5 +1,4 @@
 import asyncio
-import os
 import shutil
 from pathlib import Path
 from typing import AsyncGenerator, Generator
@@ -10,7 +9,7 @@ import pytest_asyncio
 
 from app.core.config import settings
 from app.domain.entities import IssueData, TaskState, TaskStatus
-from app.infrastructure.db.database import async_session_maker, init_db
+from app.infrastructure.db.database import init_db
 from app.infrastructure.db.repository import StateRepository
 from app.infrastructure.opencode.manager import OpenCodeProcessManager
 from app.infrastructure.telegram.notifier import TelegramNotifier
@@ -18,7 +17,6 @@ from app.infrastructure.vcs.git_cli import GitCLIClient
 from app.infrastructure.vcs.github_api import GitHubAPIClient
 
 
-from app.core.config import settings
 
 settings.IDLE_TIMEOUT = 1  # 1 second for tests
 

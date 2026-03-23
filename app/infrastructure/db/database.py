@@ -16,7 +16,7 @@ class TaskStateModel(Base):
     __tablename__ = "task_states"
 
     issue_number: Mapped[int] = mapped_column(Integer, primary_key=True)
-    repo_url: Mapped[str] = mapped_column(String, nullable=False)
+    repo_url: Mapped[str] = mapped_column(String, primary_key=True)
     branch_name: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[TaskStatus] = mapped_column(
         SQLEnum(TaskStatus), nullable=False, default=TaskStatus.PENDING

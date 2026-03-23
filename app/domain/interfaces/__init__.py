@@ -96,6 +96,7 @@ class IStateRepository(ABC):
     async def set_active_instance(
         self,
         issue_number: int,
+        repo_url: str,
         port: Optional[int],
         session_id: Optional[str] = None,
         status: Optional[str] = None,
@@ -103,7 +104,7 @@ class IStateRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_task_state(self, issue_number: int) -> Optional[TaskState]:
+    async def get_task_state(self, issue_number: int, repo_url: str) -> Optional[TaskState]:
         pass
 
     @abstractmethod

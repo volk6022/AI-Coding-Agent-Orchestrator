@@ -1,1 +1,1 @@
-from app.infrastructure.telegram.notifier import TelegramNotifier
+from app.infrastructure.telegram.notifier import TelegramNotifier as TelegramNotifier

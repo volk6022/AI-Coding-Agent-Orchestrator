@@ -1,6 +1,5 @@
 import hmac
 import hashlib
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -57,13 +56,20 @@ def verify_github_signature(payload: bytes, signature: str) -> bool:
         logger.warning("no_webhook_secret_configured")
         return True
 
-    expected = hmac.new(
-        settings.GITHUB_WEBHOOK_SECRET.encode(),
-        payload,
-        hashlib.sha256,
-    ).hexdigest()
+    # Support multiple webhook secrets (comma-separated) for multi-repo deployments
+    secrets = [s.strip() for s in settings.GITHUB_WEBHOOK_SECRET.split(",") if s.strip()]
 
-    return hmac.compare_digest(f"sha256={expected}", signature)
+    for secret in secrets:
+        expected = hmac.new(
+            secret.encode(),
+            payload,
+            hashlib.sha256,
+        ).hexdigest()
+
+        if hmac.compare_digest(f"sha256={expected}", signature):
+            return True
+
+    return False
 
 
 class IssueEvent(BaseModel):
@@ -142,7 +148,6 @@ async def handle_issue_event(
 
     logger.info("new_issue_received", issue_number=issue_number, repo=repo)
 
-    from app.application.use_cases.execute_task import execute_coding_task
     from app.domain.entities import IssueData
 
     issue_data = IssueData(
@@ -186,7 +191,7 @@ async def handle_comment_event(
     issue_number = issue.get("number")
     comment_body = comment.get("body", "")
 
-    task_state = await db.get_task_state(issue_number)
+    task_state = await db.get_task_state(issue_number, repo)
     if not task_state:
         return {"status": "ignored", "reason": "no_active_task"}
 
@@ -199,6 +204,7 @@ async def handle_comment_event(
 
     await handle_user_reply(
         issue_number=issue_number,
+        repo_url=repo,
         comment_body=comment_body,
         oc_manager=oc_manager,
         db=db,

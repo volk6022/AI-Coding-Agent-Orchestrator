@@ -6,13 +6,10 @@ including failure scenarios and edge cases.
 """
 
 import asyncio
-import json
-import os
 import shutil
 import tempfile
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Generator
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
@@ -28,13 +25,8 @@ from app.domain.interfaces import (
     IOpenCodeClient,
     ITelegramNotifier,
 )
-from app.infrastructure.db.database import async_session_maker, init_db
+from app.infrastructure.db.database import init_db
 from app.infrastructure.db.repository import StateRepository
-from app.infrastructure.opencode.client import OpenCodeClient
-from app.infrastructure.opencode.manager import OpenCodeProcessManager
-from app.infrastructure.vcs.git_cli import GitCLIClient
-from app.infrastructure.vcs.github_api import GitHubAPIClient
-from app.infrastructure.telegram.notifier import TelegramNotifier
 
 
 @pytest.fixture(autouse=True)
@@ -444,7 +436,7 @@ class TestE2EFullFlow:
         assert len(mock_oc_manager.kill_calls) == 1
         assert len(mock_git.cleanup_calls) == 1
 
-        task_state = await mock_db.get_task_state(sample_issue.issue_number)
+        task_state = await mock_db.get_task_state(sample_issue.issue_number, sample_issue.repo_url)
         assert task_state is not None
         assert task_state.status == TaskStatus.DONE
 
@@ -475,7 +467,7 @@ class TestE2EFullFlow:
         assert len(mock_telegram.messages_sent) >= 1
         assert "question" in mock_telegram.messages_sent[0].lower()
 
-        task_state = await mock_db.get_task_state(sample_issue.issue_number)
+        task_state = await mock_db.get_task_state(sample_issue.issue_number, sample_issue.repo_url)
         assert task_state is not None
         assert task_state.status == TaskStatus.DONE
 
@@ -509,6 +501,7 @@ class TestE2EFullFlow:
         # Send user reply
         await handle_user_reply(
             issue_number=sample_issue.issue_number,
+            repo_url=sample_issue.repo_url,
             comment_body="Here's the clarification you need",
             oc_manager=mock_oc_manager,
             db=mock_db,
@@ -520,7 +513,9 @@ class TestE2EFullFlow:
         assert "clarification" in mock_oc_client.replies_received[0].lower()
 
         # Verify task status was updated to RUNNING
-        updated_state = await mock_db.get_task_state(sample_issue.issue_number)
+        updated_state = await mock_db.get_task_state(
+            sample_issue.issue_number, sample_issue.repo_url
+        )
         assert updated_state is not None
         assert updated_state.status == TaskStatus.RUNNING
 
@@ -580,7 +575,7 @@ class TestE2EFailureModes:
         assert len(mock_telegram.messages_sent) >= 1
         assert "Error" in mock_telegram.messages_sent[0]
 
-        task_state = await mock_db.get_task_state(sample_issue.issue_number)
+        task_state = await mock_db.get_task_state(sample_issue.issue_number, sample_issue.repo_url)
         assert task_state is not None
         assert task_state.status == TaskStatus.FAILED
 
@@ -622,7 +617,7 @@ class TestE2EFailureModes:
         assert len(mock_telegram.messages_sent) >= 1
         assert "Timeout" in mock_telegram.messages_sent[0]
 
-        task_state = await mock_db.get_task_state(sample_issue.issue_number)
+        task_state = await mock_db.get_task_state(sample_issue.issue_number, sample_issue.repo_url)
         assert task_state is not None
         assert task_state.status == TaskStatus.ABORTED
 
@@ -777,7 +772,7 @@ class TestE2EDatabasePersistence:
             telegram=mock_telegram,
         )
 
-        task_state = await mock_db.get_task_state(sample_issue.issue_number)
+        task_state = await mock_db.get_task_state(sample_issue.issue_number, sample_issue.repo_url)
         assert task_state is not None
         assert task_state.issue_number == sample_issue.issue_number
         assert task_state.repo_url == sample_issue.repo_url
@@ -795,6 +790,7 @@ class TestE2EDatabasePersistence:
         """Test that handle_reply gracefully handles non-existent tasks."""
         await handle_user_reply(
             issue_number=99999,
+            repo_url="owner/repo",
             comment_body="Test reply",
             oc_manager=mock_oc_manager,
             db=mock_db,
@@ -825,6 +821,7 @@ class TestE2EDatabasePersistence:
 
         await handle_user_reply(
             issue_number=sample_issue.issue_number,
+            repo_url=sample_issue.repo_url,
             comment_body="Test reply",
             oc_manager=mock_oc_manager,
             db=mock_db,

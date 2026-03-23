@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "sqlite+aiosqlite:///./orchestrator.db"
 
+    # Comma-separated list of secrets to support multiple webhooks/repositories
     GITHUB_WEBHOOK_SECRET: str = ""
     GITHUB_TOKEN: str = ""
 

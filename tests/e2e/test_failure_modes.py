@@ -3,7 +3,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-import pytest_asyncio
 
 from app.application.use_cases.execute_task import execute_coding_task
 from app.core.config import settings
@@ -117,7 +116,10 @@ async def test_idle_timeout_triggers_abort(
     mock_github_client.post_comment.assert_called()
     mock_telegram.send_message.assert_called()
     mock_db.set_active_instance.assert_any_call(
-        sample_issue_data.issue_number, port=None, status=TaskStatus.ABORTED
+        sample_issue_data.issue_number,
+        sample_issue_data.repo_url,
+        port=None,
+        status=TaskStatus.ABORTED,
     )
 
 

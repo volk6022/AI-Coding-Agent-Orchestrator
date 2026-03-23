@@ -1,4 +1,3 @@
-import logging
 
 import structlog
 from structlog.processors import JSONRenderer, TimeStamper, add_log_level

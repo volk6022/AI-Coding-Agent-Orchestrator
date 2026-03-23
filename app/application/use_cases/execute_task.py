@@ -48,6 +48,7 @@ async def execute_coding_task(
 
         await db.set_active_instance(
             issue_data.issue_number,
+            issue_data.repo_url,
             oc_process.port,
             status="RUNNING",
         )
@@ -57,6 +58,7 @@ async def execute_coding_task(
 
         await db.set_active_instance(
             issue_data.issue_number,
+            issue_data.repo_url,
             oc_process.port,
             session_id=session_id,
         )
@@ -76,11 +78,17 @@ async def execute_coding_task(
             async with asyncio.timeout(idle_timeout):
                 async for event in oc_client.listen_events(session_id):
                     # Periodically check for external abort status inside the SSE stream
-                    current_state = await db.get_task_state(issue_data.issue_number)
+                    current_state = await db.get_task_state(
+                        issue_data.issue_number, issue_data.repo_url
+                    )
                     if current_state and current_state.status == TaskStatus.ABORTED:
-                        logger.info("task_aborted_by_user", issue_number=issue_data.issue_number)
+                        logger.info(
+                            "task_aborted_by_user",
+                            issue_number=issue_data.issue_number,
+                            repo=issue_data.repo_url,
+                        )
                         await telegram.send_message(
-                            f"Task #{issue_data.issue_number} aborted by user."
+                            f"Task #{issue_data.issue_number} ({issue_data.repo_url}) aborted by user."
                         )
                         return
 
@@ -122,6 +130,7 @@ async def execute_coding_task(
                             )
                             await db.set_active_instance(
                                 issue_data.issue_number,
+                                issue_data.repo_url,
                                 oc_process.port,
                                 session_id=session_id,
                                 status="WAITING_REPLY",
@@ -146,12 +155,15 @@ async def execute_coding_task(
         except TimeoutError:
             await github.post_comment(
                 issue_data.issue_number,
-                "Session aborted due to 12h idle timeout.",
+                "Session aborted due to idle timeout.",
                 issue_data.repo_url,
             )
-            await telegram.send_message(f"Task #{issue_data.issue_number} killed (Idle Timeout).")
+            await telegram.send_message(
+                f"Task #{issue_data.issue_number} ({issue_data.repo_url}) killed (Idle Timeout)."
+            )
             await db.set_active_instance(
                 issue_data.issue_number,
+                issue_data.repo_url,
                 port=None,
                 status="ABORTED",
             )
@@ -170,18 +182,20 @@ async def execute_coding_task(
             )
             await db.set_active_instance(
                 issue_data.issue_number,
+                issue_data.repo_url,
                 port=None,
                 status="DONE",
             )
             await telegram.send_message(
-                f"Success! PR created for Issue #{issue_data.issue_number}."
+                f"Success! PR created for Issue #{issue_data.issue_number} in {issue_data.repo_url}."
             )
         else:
             await db.set_active_instance(
                 issue_data.issue_number,
+                issue_data.repo_url,
                 port=None,
                 status="FAILED",
             )
             await telegram.send_message(
-                f"Task #{issue_data.issue_number} finished without completion marker."
+                f"Task #{issue_data.issue_number} ({issue_data.repo_url}) finished without completion marker."
             )
