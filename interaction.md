@@ -9,7 +9,7 @@ sequenceDiagram
     autonumber
     
     actor User
-    participant GH as GitHub (Repo)
+    participant GH as GitHub (Repo A/B)
     participant Web as FastAPI Server
     participant Worker as TaskIQ Worker
     participant Git as Local Git CLI
@@ -19,11 +19,17 @@ sequenceDiagram
     %% Task Initialization
     User->>GH: Open new issue
     GH->>Web: Webhook POST (Issue Created)
+    Note over Web: Signature verified via<br/>multi-secret GITHUB_WEBHOOK_SECRET
     Web->>Worker: Queue execute_task job
-    Worker->>TG: (Optional) Notify task started
+    Worker->>TG: Task Pending: Issue #N (Repo X)
+    
+    %% HITL Approval
+    TG-->>User: Request manual approval to start session
+    User->>TG: /approve (or interactive button)
+    Note over Worker: Session parameters can be<br/>modified/appended here
     
     %% Environment Setup
-    Worker->>Git: Clone repository into new workspace
+    Worker->>Git: Clone repository into isolated workspace
     Worker->>Git: Create feature branch
     Worker->>OC: Spawn `opencode serve` process
     OC-->>Worker: Dynamically assigned port
@@ -31,7 +37,7 @@ sequenceDiagram
     %% Session Initialization
     Worker->>OC: POST /session (Create session)
     OC-->>Worker: Return session_id
-    Worker->>OC: POST /session/:id/prompt_async (Send Issue prompt)
+    Worker->>OC: POST /session/:id/prompt_async (Send User-Modified Prompt)
     
     %% SSE Event Loop
     loop Event Stream (SSE)
@@ -68,6 +74,10 @@ sequenceDiagram
         OC-->>Worker: data: {"type": "session.error", ...}
         Worker->>TG: Send Error Alert / Timeout Warning
         Worker->>GH: Post Error / Timeout comment on Issue
+        
+        %% Admin recovery
+        User->>TG: /retry <issue> <repo>
+        Note over Worker: Restarts the process flow
     end
     
     Worker->>OC: Kill OpenCode Server process
@@ -76,10 +86,11 @@ sequenceDiagram
 
 ## Description of Key Steps
 
-1. **GitHub Webhooks**: The system acts on two primary webhook events: `issues` (opened) and `issue_comment` (created).
-2. **Asynchronous Processing**: The FastAPI server immediately acknowledges the webhook to GitHub and delegates the heavy lifting to TaskIQ workers.
-3. **Isolated Workspaces**: Each task executes in a fresh `git clone` to guarantee that the `opencode` instance does not conflict with concurrent tasks or previous state.
-4. **OpenCode Integration**: The worker interacts with the local `opencode` server exclusively via its exposed REST API (`/session`, `/session/:id/prompt_async`) and listens to the Server-Sent Events (`/event`) stream to parse the agent's response incrementally (`message.part.updated`).
-5. **Interactive Loop**: The TUI-less agent session allows for a back-and-forth conversation. If the agent requires human clarification, its text is forwarded to GitHub as a comment. When the user replies, it's sent right back into the active agent session.
-6. **Completion**: A successful run is explicitly signaled by the agent outputting `[TASK_COMPLETED]`. The system automatically wraps the changes up into a commit and opens a pull request.
-7. **Telegram Control**: Throughout this lifecycle, the Telegram Bot serves as an active observer, providing real-time observability over timeouts, active process handling, user reply prompts, and final results.
+1. **GitHub Webhooks (Multi-Repo)**: The system supports an arbitrary number of repositories. Webhooks are verified using a comma-separated list of secrets in `GITHUB_WEBHOOK_SECRET`. Tasks are identified by a composite key of `issue_number` and `repo_url`.
+2. **Asynchronous Processing**: The FastAPI server immediately acknowledges the webhook to GitHub and delegates task management to TaskIQ workers.
+3. **Human-in-the-Loop (HITL)**: Agent sessions do not start automatically. The user must approve the task via Telegram. During this stage, the user can modify the request, append specific files to the prompt, or dictate which commands the agent should use.
+4. **Isolated Workspaces**: Each task executes in a fresh `git clone` with a dedicated `opencode` instance on a dynamically assigned port to prevent cross-task contamination.
+5. **OpenCode Integration**: The worker interacts with the local `opencode` server via its REST API (`/session`, `/session/:id/prompt_async`) and monitors progress via the Server-Sent Events (`/event`) stream.
+6. **Interactive Feedback**: If the agent requires human clarification, its response is accumulated from `message.part.updated` events and posted to GitHub. Human replies are injected back into the active agent session.
+7. **Persistence & Observability**: All task states are stored in a database. Users can monitor active tasks via `/list`, view logs via `/logs`, and recover from failures using `/retry` or `/cancel`.
+8. **Completion**: Upon detecting the `[TASK_COMPLETED]` marker, the orchestrator automatically commits the changes, pushes the branch, and creates a Pull Request on the target repository.
